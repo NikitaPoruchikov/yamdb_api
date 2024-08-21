@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
+from .constants import MAX_LENGTH_CHAR, MAX_LENGTH_CHAR_BIO, MAX_LENGTH_MAIL
+
 
 class CustomUser(AbstractUser):
     """Кастомная модель пользователя."""
@@ -14,20 +16,37 @@ class CustomUser(AbstractUser):
         (ADMIN, 'admin'),
     ]
 
-    username = models.CharField('Логин', max_length=150, unique=True)
-    email = models.EmailField('Почта', max_length=254, unique=True)
-    first_name = models.CharField('Имя', max_length=150, blank=True)
-    last_name = models.CharField('Фамилия', max_length=150, blank=True)
-    bio = models.CharField('Биография', max_length=256, blank=True)
+    username = models.CharField(
+        'Логин',
+        max_length=MAX_LENGTH_CHAR,
+        unique=True
+    )
+    email = models.EmailField('Почта', max_length=MAX_LENGTH_MAIL, unique=True)
+    first_name = models.CharField(
+        'Имя',
+        max_length=MAX_LENGTH_CHAR,
+        blank=True
+    )
+    last_name = models.CharField(
+        'Фамилия',
+        max_length=MAX_LENGTH_CHAR,
+        blank=True
+    )
+    bio = models.CharField(
+        'Биография',
+        max_length=MAX_LENGTH_CHAR_BIO,
+        blank=True
+    )
     role = models.CharField(
         'Статус',
-        max_length=50,
+        max_length=MAX_LENGTH_CHAR // 3,
         blank=False,
         choices=USER_ROLES,
         default='user'
     )
     confirmation_code = models.CharField(
-        verbose_name='Код подтверждения', max_length=150
+        verbose_name='Код подтверждения',
+        max_length=MAX_LENGTH_CHAR
     )
 
     class Meta:

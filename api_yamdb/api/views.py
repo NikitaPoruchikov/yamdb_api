@@ -10,13 +10,12 @@ from rest_framework.permissions import (AllowAny, IsAuthenticated,
                                         IsAuthenticatedOrReadOnly)
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
-from users.models import CustomUser
-
 from reviews.models import Category, Genre, Review, Title
+from users.models import CustomUser
 
 from .filters import TitleFilter
 from .mixins import CategoryGenreMixin
-from .permissions import (IsAdmin, IsAdminOrReadOnly, IsAuthorModeratorAdmin)
+from .permissions import IsAdmin, IsAdminOrReadOnly, IsAuthorModeratorAdmin
 from .serializers import (CategorySerializer, CommentSerializer,
                           CustomTokenObtainSerializer, CustomUserSerializer,
                           GenreSerializer, ReviewSerializer,

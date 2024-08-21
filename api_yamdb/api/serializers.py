@@ -7,11 +7,10 @@ from rest_framework import serializers, status
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainSerializer
-
 from reviews.models import Category, Comment, Genre, Review, Title
 from users.models import CustomUser
-from .utils import send_code_to_mail
 
+from .utils import send_code_to_mail
 
 USERNAME_REGEX = r'^[\w.@+-]+$'
 

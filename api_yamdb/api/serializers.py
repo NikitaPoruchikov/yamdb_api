@@ -10,21 +10,20 @@ from rest_framework_simplejwt.serializers import TokenObtainSerializer
 from reviews.models import Category, Comment, Genre, Review, Title
 from users.models import CustomUser
 
+from .constants import MAX_LENGTH_CHAR, MAX_LENGTH_MAIL, USERNAME_REGEX
 from .utils import send_code_to_mail
-
-USERNAME_REGEX = r'^[\w.@+-]+$'
 
 
 class UserRegistrationSerializer(serializers.Serializer):
     """Сериализатор для регистрации пользователя."""
 
     email = serializers.EmailField(
-        max_length=254,
+        max_length=MAX_LENGTH_MAIL,
         required=True,
     )
 
     username = serializers.CharField(
-        max_length=150,
+        max_length=MAX_LENGTH_CHAR,
         required=True,
         validators=[
             RegexValidator(
@@ -122,21 +121,20 @@ class CustomUserSerializer(serializers.ModelSerializer):
             UniqueValidator(queryset=CustomUser.objects.all()),
             RegexValidator(regex=USERNAME_REGEX)
         ],
-        max_length=150,
+        max_length=MAX_LENGTH_CHAR,
         required=True,
     )
     email = serializers.EmailField(
-        validators=[
-            UniqueValidator(queryset=CustomUser.objects.all())],
-        max_length=254,
+        validators=[UniqueValidator(queryset=CustomUser.objects.all())],
+        max_length=MAX_LENGTH_MAIL,
         required=True,
     )
 
     class Meta:
+        model = CustomUser
         fields = (
             'username', 'email', 'first_name', 'last_name', 'bio', 'role'
         )
-        model = CustomUser
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -157,12 +155,7 @@ class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
         fields = (
-            'id',
-            'text',
-            'author',
-            'pub_date',
-            'review',
-            'title'
+            'id', 'text', 'author', 'pub_date', 'review', 'title'
         )
 
 
@@ -219,8 +212,10 @@ class TitleReadSerializer(serializers.ModelSerializer):
     rating = serializers.IntegerField(read_only=True)
 
     class Meta:
-        fields = '__all__'
         model = Title
+        fields = (
+            'id', 'name', 'year', 'rating', 'description', 'genre', 'category'
+        )
 
 
 class TitleWriteSerializer(serializers.ModelSerializer):
@@ -240,7 +235,9 @@ class TitleWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Title
-        fields = '__all__'
+        fields = (
+            'id', 'name', 'year', 'rating', 'description', 'genre', 'category'
+        )
 
     def get_rating(self, obj):
         return obj.rating

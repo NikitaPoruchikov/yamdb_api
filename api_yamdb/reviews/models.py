@@ -2,13 +2,15 @@ from django.contrib.auth import get_user_model
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
+from .constants import DEFAULT_SINT, MAX_LENGTH_CHAR
+
 User = get_user_model()
 
 
 class Category(models.Model):
     """Категории (типы) произведений."""
 
-    name = models.CharField(max_length=256)
+    name = models.CharField(max_length=MAX_LENGTH_CHAR)
     slug = models.SlugField(unique=True)
 
     class Meta:
@@ -37,13 +39,13 @@ class Comment(models.Model):
     pub_date = models.DateTimeField('Дата публикации', auto_now_add=True)
 
     class Meta:
-        ordering = ['id']
+        ordering = ['-pub_date']
 
 
 class Genre(models.Model):
     """Категории жанров."""
 
-    name = models.CharField(max_length=256)
+    name = models.CharField(max_length=MAX_LENGTH_CHAR)
     slug = models.SlugField(unique=True)
 
     class Meta:
@@ -70,7 +72,7 @@ class Review(models.Model):
     pub_date = models.DateTimeField('Дата публикации', auto_now_add=True)
 
     class Meta:
-        ordering = ('-pub_date',)
+        ordering = ['-pub_date']
         constraints = [
             models.UniqueConstraint(
                 fields=['title', 'author'],
@@ -86,9 +88,9 @@ class Title(models.Model):
     """Произведения, к которым пишут отзывы (определённый фильм, книга или
     песенка)."""
 
-    name = models.CharField(max_length=256)
+    name = models.CharField(max_length=MAX_LENGTH_CHAR)
     description = models.TextField()
-    year = models.PositiveSmallIntegerField(default=0)
+    year = models.PositiveSmallIntegerField(default=DEFAULT_SINT)
     category = models.ForeignKey(
         Category,
         on_delete=models.SET_NULL,

@@ -11,4 +11,4 @@ class CustomUserAdmin(UserAdmin):
 
     add_form = CustomUserCreationForm
     model = CustomUser
-    ordering = ('email',)
+    ordering = ['email']

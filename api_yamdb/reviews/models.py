@@ -3,6 +3,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from .constants import DEFAULT_SINT, MAX_LENGTH_CHAR
+from .validators import PastOrPresentYearValidator
 
 User = get_user_model()
 
@@ -76,7 +77,7 @@ class Review(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=['title', 'author'],
-                name='unique_relationships'
+                name='unique_title_author'
             ),
         ]
 
@@ -90,7 +91,10 @@ class Title(models.Model):
 
     name = models.CharField(max_length=MAX_LENGTH_CHAR)
     description = models.TextField()
-    year = models.PositiveSmallIntegerField(default=DEFAULT_SINT)
+    year = models.PositiveSmallIntegerField(
+        default=DEFAULT_SINT,
+        validators=(PastOrPresentYearValidator,)
+    )
     category = models.ForeignKey(
         Category,
         on_delete=models.SET_NULL,
@@ -98,24 +102,7 @@ class Title(models.Model):
         blank=True,
         null=True
     )
-    genre = models.ManyToManyField(Genre, through='GenreTitle')
-    rating = models.IntegerField(null=True)
+    genre = models.ManyToManyField(Genre)
 
     class Meta:
         ordering = ['id']
-
-
-class GenreTitle(models.Model):
-
-    genre = models.ForeignKey(
-        Genre,
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True
-    )
-    title = models.ForeignKey(
-        Title,
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True
-    )

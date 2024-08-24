@@ -1,3 +1,4 @@
+from django.db.models import Avg
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -55,7 +56,7 @@ class CustomUserViewSet(viewsets.ModelViewSet):
     permission_classes = (IsAuthenticated, IsAdmin,)
     lookup_field = 'username'
     pagination_class = PageNumberPagination
-    http_method_names = ['get', 'post', 'patch', 'delete']
+    http_method_names = ('get', 'post', 'patch', 'delete')
 
     @action(
         detail=False,
@@ -71,7 +72,7 @@ class CustomUserViewSet(viewsets.ModelViewSet):
         )
 
         serializer.is_valid(raise_exception=True)
-        serializer.save(role=CustomUser.USER)
+        serializer.save(role=CustomUser.UserGrade.USER)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -86,7 +87,7 @@ class CommentViewSet(viewsets.ModelViewSet):
     serializer_class = CommentSerializer
     pagination_class = PageNumberPagination
     permission_classes = (IsAuthenticatedOrReadOnly, IsAuthorModeratorAdmin,)
-    http_method_names = ['get', 'post', 'patch', 'delete']
+    http_method_names = ('get', 'post', 'patch', 'delete')
 
     def get_queryset(self):
         return self.get_item().comments.all()
@@ -122,7 +123,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.all()
     serializer_class = ReviewSerializer
     permission_classes = (IsAuthenticatedOrReadOnly, IsAuthorModeratorAdmin)
-    http_method_names = ['get', 'post', 'patch', 'delete']
+    http_method_names = ('get', 'post', 'patch', 'delete')
 
     def perform_create(self, serializer):
         title_object = get_object_or_404(Title, id=self.kwargs.get('title_id'))
@@ -132,12 +133,14 @@ class ReviewViewSet(viewsets.ModelViewSet):
 class TitleViewSet(viewsets.ModelViewSet):
     """ViewSet для управления произведениями."""
 
-    queryset = Title.objects.all()
+    queryset = Title.objects.all().annotate(
+        Avg('reviews__score')
+    ).order_by('name')
     pagination_class = PageNumberPagination
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filter_backends = (DjangoFilterBackend,)
     filterset_class = TitleFilter
     permission_classes = (IsAdminOrReadOnly,)
-    http_method_names = ['get', 'post', 'patch', 'delete']
+    http_method_names = ('get', 'post', 'patch', 'delete')
 
     def get_serializer_class(self):
         if self.action in ('list', 'retrieve'):

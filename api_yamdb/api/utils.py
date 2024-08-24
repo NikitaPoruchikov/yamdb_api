@@ -6,7 +6,7 @@ def send_code_to_mail(email, confirmation_code):
     """Отправка сообщений с кодом подтверждения на почту."""
 
     send_mail(
-        subject='Yamdb confirmation code',
+        subject='YaMDb Confirmation Code',
         message=f'Ваш проверочный код: {confirmation_code}',
         from_email=settings.EMAIL_SENDER,
         recipient_list=[email],

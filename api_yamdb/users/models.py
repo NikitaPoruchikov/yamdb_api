@@ -1,25 +1,25 @@
 from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 from .constants import MAX_LENGTH_CHAR, MAX_LENGTH_CHAR_BIO, MAX_LENGTH_MAIL
+from .validators import validate_username
 
 
 class CustomUser(AbstractUser):
     """Кастомная модель пользователя."""
 
-    ADMIN = 'admin'
-    MODERATOR = 'moderator'
-    USER = 'user'
-    USER_ROLES = [
-        (USER, 'user'),
-        (MODERATOR, 'moderator'),
-        (ADMIN, 'admin'),
-    ]
+    class UserGrade(models.TextChoices):
+        USER = 'user', _('User')
+        MODERATOR = 'moderator', _('Moderator')
+        ADMIN = 'admin', _('Admin')
 
     username = models.CharField(
         'Логин',
         max_length=MAX_LENGTH_CHAR,
-        unique=True
+        unique=True,
+        validators=(validate_username, UnicodeUsernameValidator())
     )
     email = models.EmailField('Почта', max_length=MAX_LENGTH_MAIL, unique=True)
     first_name = models.CharField(
@@ -41,8 +41,8 @@ class CustomUser(AbstractUser):
         'Статус',
         max_length=MAX_LENGTH_CHAR // 3,
         blank=False,
-        choices=USER_ROLES,
-        default='user'
+        choices=UserGrade.choices,
+        default=UserGrade.USER,
     )
     confirmation_code = models.CharField(
         verbose_name='Код подтверждения',
@@ -59,8 +59,8 @@ class CustomUser(AbstractUser):
 
     @property
     def is_admin(self):
-        return self.role == self.ADMIN or self.is_staff
+        return self.role == self.UserGrade.ADMIN or self.is_staff
 
     @property
     def is_moderator(self):
-        return self.role == self.MODERATOR
+        return self.role == self.UserGrade.MODERATOR

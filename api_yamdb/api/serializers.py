@@ -5,6 +5,7 @@ from django.core.validators import RegexValidator
 from django.db.models import Avg
 from rest_framework import serializers, status
 from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.generics import get_object_or_404
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainSerializer
 from reviews.models import Category, Comment, Genre, Review, Title
@@ -65,6 +66,14 @@ class UserRegistrationSerializer(serializers.Serializer):
                     code=status.HTTP_400_BAD_REQUEST
                 )
             return existing_user_by_username
+
+        if existing_user_by_email and existing_user_by_username:
+            raise serializers.ValidationError(
+                {'error': 'User with this email and username '
+                          'already exists .'},
+                code=status.HTTP_400_BAD_REQUEST
+            )
+
         user = CustomUser.objects.create(email=email, username=username)
         confirmation_code = default_token_generator.make_token(user)
         send_code_to_mail(email, confirmation_code)
@@ -95,14 +104,19 @@ class CustomTokenObtainSerializer(TokenObtainSerializer):
         return token
 
     def validate(self, attrs):
+        username = attrs.get('username')
+        confirmation_code = attrs.get('confirmation_code')
+        if not username:
+            raise serializers.ValidationError(
+                {'username': 'Имя пользователя обязательно.'})
         user = CustomUser.objects.filter(
             username=attrs[self.username_field],
         ).first()
         if not user:
-            raise NotFound(
-                {'username': 'Пользователь с таким username не существует'},
-                code='user_not_found',
-            )
+            raise NotFound({'detail': 'Пользователь не найден.'})
+        if not confirmation_code:
+            raise serializers.ValidationError(
+                {'confirmation_code': 'Код подтверждения обязателен.'})
         if str(user.confirmation_code) != attrs['confirmation_code']:
             raise ValidationError(
                 {'confirmation_code': 'Неверный код подтверждения'},
@@ -177,11 +191,6 @@ class ReviewSerializer(serializers.ModelSerializer):
         model = Review
         fields = ('id', 'text', 'author', 'score', 'pub_date')
 
-    def create(self, validated_data):
-        review = super().create(validated_data)
-        self.update_title_rating(review.title)
-        return review
-
     def validate(self, data):
         request = self.context.get('request')
         if request.method == 'POST':
@@ -195,21 +204,16 @@ class ReviewSerializer(serializers.ModelSerializer):
                 )
         return data
 
-    def update_title_rating(self, title):
-        avg_score = title.reviews.aggregate(Avg('score'))['score__avg']
-        title.rating = round(avg_score, 1) if avg_score else None
-        title.save()
-
 
 class TitleReadSerializer(serializers.ModelSerializer):
     """Сериализатор для чтения информации о названии."""
 
-    category = CategorySerializer()
+    rating = serializers.SerializerMethodField()
     genre = GenreSerializer(
         read_only=True,
         many=True
     )
-    rating = serializers.IntegerField(read_only=True)
+    category = CategorySerializer()
 
     class Meta:
         model = Title
@@ -217,11 +221,14 @@ class TitleReadSerializer(serializers.ModelSerializer):
             'id', 'name', 'year', 'rating', 'description', 'genre', 'category'
         )
 
+    def get_rating(self, obj):
+        return obj.reviews.aggregate(Avg('score', default=0)).get('score__avg')
+
 
 class TitleWriteSerializer(serializers.ModelSerializer):
     """Сериализатор для записи информации о названии."""
 
-    rating = serializers.SerializerMethodField()
+    rating = serializers.IntegerField(read_only=True)
     genre = serializers.SlugRelatedField(
         many=True,
         queryset=Genre.objects.all(),
@@ -238,6 +245,3 @@ class TitleWriteSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'name', 'year', 'rating', 'description', 'genre', 'category'
         )
-
-    def get_rating(self, obj):
-        return obj.rating

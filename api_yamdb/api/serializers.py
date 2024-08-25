@@ -5,7 +5,6 @@ from django.core.validators import RegexValidator
 from django.db.models import Avg
 from rest_framework import serializers, status
 from rest_framework.exceptions import NotFound, ValidationError
-from rest_framework.generics import get_object_or_404
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainSerializer
 from reviews.models import Category, Comment, Genre, Review, Title

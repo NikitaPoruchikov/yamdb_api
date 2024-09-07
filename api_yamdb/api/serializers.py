@@ -1,15 +1,16 @@
-import re
+from datetime import datetime
 
 from django.contrib.auth.tokens import default_token_generator
 from django.core.validators import RegexValidator
-from django.db.models import Avg
 from rest_framework import serializers, status
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import ValidationError
+from rest_framework.generics import get_object_or_404
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+
 from reviews.models import Category, Comment, Genre, Review, Title
 from users.models import CustomUser
-
 from .constants import MAX_LENGTH_CHAR, MAX_LENGTH_MAIL, USERNAME_REGEX
 from .utils import send_code_to_mail
 
@@ -43,47 +44,87 @@ class UserRegistrationSerializer(serializers.Serializer):
         username = validated_data['username']
 
         existing_user_by_email = CustomUser.objects.filter(email=email).first()
-
-        if existing_user_by_email:
-            if existing_user_by_email.username != username:
-                raise serializers.ValidationError(
-                    {'error': 'User with this email already exists '
-                              'but with a different username.'},
-                    code=status.HTTP_400_BAD_REQUEST
-                )
-            return existing_user_by_email
-
         existing_user_by_username = CustomUser.objects.filter(
             username=username
         ).first()
 
-        if existing_user_by_username:
-            if existing_user_by_username.email != email:
-                raise serializers.ValidationError(
-                    {'error': 'User with this username already exists '
-                              'but with a different email.'},
-                    code=status.HTTP_400_BAD_REQUEST
-                )
-            return existing_user_by_username
-
-        if existing_user_by_email and existing_user_by_username:
+        if existing_user_by_email and (existing_user_by_email.username
+                                       != username):
             raise serializers.ValidationError(
-                {'error': 'User with this email and username '
-                          'already exists .'},
+                {
+                    'email': [
+                        'User with this email already exists but with '
+                        'a different username.'
+                    ],
+                    'username': []  # Пустой массив для username
+                },
                 code=status.HTTP_400_BAD_REQUEST
             )
 
-        user = CustomUser.objects.create(email=email, username=username)
+        if existing_user_by_username and (existing_user_by_username.email
+                                          != email):
+            raise serializers.ValidationError(
+                {
+                    'username': [
+                        'User with this username already exists but with '
+                        'a different email.'
+                    ],
+                    'email': []  # Пустой массив для email
+                },
+                code=status.HTTP_400_BAD_REQUEST
+            )
+
+        user = (
+            existing_user_by_email
+            or existing_user_by_username
+            or CustomUser.objects.create(
+                email=email, username=username
+            )
+        )
+
         confirmation_code = default_token_generator.make_token(user)
+        user.confirmation_code = confirmation_code
+        user.save()
+
         send_code_to_mail(email, confirmation_code)
         return user
 
+    def validate_username(self, username):  # copy
+        if username == "me":
+            raise serializers.ValidationError(
+                "Имя пользователя 'me' недопустимо.")
+        return username
+
     def validate(self, data):
+        errors = {}
         username = data.get('username')
+        email = data.get('email')
 
         if username:
-            if username == 'me' or not re.match(USERNAME_REGEX, username):
-                raise ValidationError('<me> can not be a username')
+            existing_user_by_username = CustomUser.objects.filter(
+                username=username
+            ).first()
+            if existing_user_by_username and (existing_user_by_username.email
+                                              != email):
+                errors['username'] = [
+                    'User with this username already exists but with '
+                    'a different email.'
+                ]
+
+        if email:
+            existing_user_by_email = CustomUser.objects.filter(
+                email=email
+            ).first()
+            if existing_user_by_email and (existing_user_by_email.username
+                                           != username):
+                errors['email'] = [
+                    'User with this email already exists but with '
+                    'a different username.'
+                ]
+
+        if errors:
+            raise ValidationError(errors)
+
         return data
 
 
@@ -103,27 +144,16 @@ class CustomTokenObtainSerializer(TokenObtainSerializer):
         return token
 
     def validate(self, attrs):
-        username = attrs.get('username')
         confirmation_code = attrs.get('confirmation_code')
-        if not username:
-            raise serializers.ValidationError(
-                {'username': 'Имя пользователя обязательно.'})
-        user = CustomUser.objects.filter(
-            username=attrs[self.username_field],
-        ).first()
-        if not user:
-            raise NotFound({'detail': 'Пользователь не найден.'})
-        if not confirmation_code:
-            raise serializers.ValidationError(
-                {'confirmation_code': 'Код подтверждения обязателен.'})
-        if str(user.confirmation_code) != attrs['confirmation_code']:
-            raise ValidationError(
-                {'confirmation_code': 'Неверный код подтверждения'},
-                code='invalid_confirmation_code',
-            )
-        self.user = user
-        user.save()
-        return {'token': str(self.get_token(self.user).access_token)}
+        username = attrs.get('username')
+
+        user = get_object_or_404(CustomUser, username=username)
+
+        if user.confirmation_code != confirmation_code:
+            raise ValidationError('Неправильный код подтверждения')
+
+        token = RefreshToken.for_user(user)
+        return {'token': str(token.access_token)}
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -137,6 +167,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
         max_length=MAX_LENGTH_CHAR,
         required=True,
     )
+
     email = serializers.EmailField(
         validators=[UniqueValidator(queryset=CustomUser.objects.all())],
         max_length=MAX_LENGTH_MAIL,
@@ -149,31 +180,32 @@ class CustomUserSerializer(serializers.ModelSerializer):
             'username', 'email', 'first_name', 'last_name', 'bio', 'role'
         )
 
+    def validate_username(self, username):  # copy
+        if username == "me":
+            raise serializers.ValidationError(
+                "Имя пользователя 'me' недопустимо.")
+        return username
+
 
 class CategorySerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Category
         fields = ('name', 'slug')
 
 
 class CommentSerializer(serializers.ModelSerializer):
-
     author = serializers.SlugRelatedField(
         read_only=True, slug_field='username'
     )
-    review = serializers.PrimaryKeyRelatedField(read_only=True)
-    title = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = Comment
         fields = (
-            'id', 'text', 'author', 'pub_date', 'review', 'title'
+            'id', 'text', 'author', 'pub_date',
         )
 
 
 class GenreSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Genre
         fields = ('name', 'slug')
@@ -204,14 +236,11 @@ class ReviewSerializer(serializers.ModelSerializer):
         return data
 
 
-class TitleReadSerializer(serializers.ModelSerializer):
+class TitleSerializerSafe(serializers.ModelSerializer):
     """Сериализатор для чтения информации о названии."""
 
-    rating = serializers.SerializerMethodField()
-    genre = GenreSerializer(
-        read_only=True,
-        many=True
-    )
+    rating = serializers.IntegerField(read_only=True)
+    genre = GenreSerializer(read_only=True, many=True)
     category = CategorySerializer()
 
     class Meta:
@@ -220,14 +249,13 @@ class TitleReadSerializer(serializers.ModelSerializer):
             'id', 'name', 'year', 'rating', 'description', 'genre', 'category'
         )
 
-    def get_rating(self, obj):
-        return obj.reviews.aggregate(Avg('score', default=0)).get('score__avg')
 
-
-class TitleWriteSerializer(serializers.ModelSerializer):
+class TitleSerializerNonSafe(serializers.ModelSerializer):
     """Сериализатор для записи информации о названии."""
 
-    rating = serializers.IntegerField(read_only=True)
+    rating = serializers.IntegerField(
+        default=None, allow_null=True, read_only=True
+    )
     genre = serializers.SlugRelatedField(
         many=True,
         queryset=Genre.objects.all(),
@@ -238,9 +266,43 @@ class TitleWriteSerializer(serializers.ModelSerializer):
         queryset=Category.objects.all(),
         slug_field='slug',
     )
+    description = serializers.CharField(required=False)
 
     class Meta:
         model = Title
         fields = (
             'id', 'name', 'year', 'rating', 'description', 'genre', 'category'
         )
+
+    def validate_year(self, year):
+        """Проверка, что год указан и не позже текущего."""
+        current_year = datetime.now().year
+        if year is None or year <= 0:
+            raise serializers.ValidationError(
+                "Год должен быть положительным числом.",
+                code=status.HTTP_400_BAD_REQUEST
+            )
+        if year > current_year:
+            raise serializers.ValidationError(
+                "Год не может быть позже текущего года.",
+                code=status.HTTP_400_BAD_REQUEST
+            )
+        return year
+
+    def validate_genre(self, value):
+        """Проверка, что список жанров не пустой."""
+        if not value:
+            raise ValidationError("Список жанров не может быть пустым.")
+        return value
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['genre'] = [
+            {'name': genre.name, 'slug': genre.slug}
+            for genre in instance.genre.all()
+        ]
+        representation['category'] = {
+            'name': instance.category.name,
+            'slug': instance.category.slug
+        }
+        return representation

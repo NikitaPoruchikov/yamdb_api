@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
-from .constants import DEFAULT_SINT, MAX_LENGTH_CHAR
+from .constants import MAX_LENGTH_CHAR
 from .validators import PastOrPresentYearValidator
 
 User = get_user_model()
@@ -35,7 +35,9 @@ class Comment(models.Model):
     title = models.ForeignKey(
         'Title',
         on_delete=models.CASCADE,
-        related_name='comments'
+        related_name='comments',
+        null=True,
+        blank=True
     )
     pub_date = models.DateTimeField('Дата публикации', auto_now_add=True)
 
@@ -92,7 +94,6 @@ class Title(models.Model):
     name = models.CharField(max_length=MAX_LENGTH_CHAR)
     description = models.TextField()
     year = models.PositiveSmallIntegerField(
-        default=DEFAULT_SINT,
         validators=(PastOrPresentYearValidator,)
     )
     category = models.ForeignKey(

@@ -3,7 +3,8 @@ from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from .constants import MAX_LENGTH_CHAR, MAX_LENGTH_CHAR_BIO, MAX_LENGTH_MAIL
+from .constants import (MAX_LENGTH_CHAR, MAX_LENGTH_CHAR_BIO, MAX_LENGTH_MAIL,
+                        MAX_LENGTH_ROLE)
 from .validators import validate_username
 
 
@@ -39,7 +40,7 @@ class CustomUser(AbstractUser):
     )
     role = models.CharField(
         'Статус',
-        max_length=MAX_LENGTH_CHAR // 3,
+        max_length=MAX_LENGTH_ROLE,
         blank=False,
         choices=UserGrade.choices,
         default=UserGrade.USER,

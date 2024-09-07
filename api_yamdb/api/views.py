@@ -20,7 +20,7 @@ from .permissions import IsAdmin, IsAdminOrReadOnly, IsAuthorModeratorAdmin
 from .serializers import (CategorySerializer, CommentSerializer,
                           CustomTokenObtainSerializer, CustomUserSerializer,
                           GenreSerializer, ReviewSerializer,
-                          TitleReadSerializer, TitleWriteSerializer,
+                          TitleSerializerNonSafe, TitleSerializerSafe,
                           UserRegistrationSerializer)
 
 
@@ -129,12 +129,23 @@ class ReviewViewSet(viewsets.ModelViewSet):
         title_object = get_object_or_404(Title, id=self.kwargs.get('title_id'))
         serializer.save(author=self.request.user, title=title_object)
 
+    def delete(self, request, title_id, review_id):
+        review = get_object_or_404(Review, id=review_id)
+
+        # Проверяем, является ли пользователь автором отзыва
+        if review.author != request.user:
+            return Response({'detail': 'У вас нет прав на удаление .'},
+                            status=403)
+
+        review.delete()
+        return Response(status=204)
+
 
 class TitleViewSet(viewsets.ModelViewSet):
     """ViewSet для управления произведениями."""
 
-    queryset = Title.objects.all().annotate(
-        Avg('reviews__score')
+    queryset = Title.objects.annotate(
+        rating=Avg('reviews__score')
     ).order_by('name')
     pagination_class = PageNumberPagination
     filter_backends = (DjangoFilterBackend,)
@@ -144,5 +155,5 @@ class TitleViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         if self.action in ('list', 'retrieve'):
-            return TitleReadSerializer
-        return TitleWriteSerializer
+            return TitleSerializerSafe
+        return TitleSerializerNonSafe

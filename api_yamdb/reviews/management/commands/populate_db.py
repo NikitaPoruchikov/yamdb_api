@@ -34,14 +34,13 @@ class ModelFileMatch(str, Enum):
 
     CATEGORY = 'category.csv', Category, None
     GENRE = 'genre.csv', Genre, None
-    TITLE = 'titles.csv', Title, ('id', 'name', 'year', 'category_id')
     USER = 'users.csv', User, None
-    COMMENT = 'comments.csv', Comment, (
-        'id', 'review_id', 'text', 'author_id', 'pub_date'
-    )
-    # NONE = 'genre_title.csv', None, None
+    TITLE = 'titles.csv', Title, ('id', 'name', 'year', 'category_id')
     REVIEW = 'review.csv', Review, (
         'id', 'title_id', 'text', 'author_id', 'score', 'pub_date'
+    )
+    COMMENT = 'comments.csv', Comment, (
+        'id', 'review_id', 'text', 'author_id', 'pub_date', 'title_id',
     )
 
 

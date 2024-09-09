@@ -1,10 +1,14 @@
-
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.core.exceptions import ValidationError
 
+from .constants import USERNAME_RESERVED
 
-def validate_username(value):
-    if not isinstance(value, str):
-        raise ValidationError('Username должен иметь тип str')
-    if value.lower() == 'me':
-        raise ValidationError('Имя пользователя <me> недопустимо.')
-    return value
+
+class CustomUsernameValidator(UnicodeUsernameValidator):
+
+    def __call__(self, value: str) -> None:
+        if value == USERNAME_RESERVED:
+            raise ValidationError(
+                f'You cannot use {USERNAME_RESERVED} for username!'
+            )
+        return super().__call__(value)

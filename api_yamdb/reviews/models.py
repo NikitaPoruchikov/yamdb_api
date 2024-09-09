@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.contrib.auth import get_user_model
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -94,7 +96,7 @@ class Title(models.Model):
     name = models.CharField(max_length=MAX_LENGTH_CHAR)
     description = models.TextField()
     year = models.PositiveSmallIntegerField(
-        validators=(PastOrPresentYearValidator,)
+        validators=(PastOrPresentYearValidator(date.today().year),)
     )
     category = models.ForeignKey(
         Category,

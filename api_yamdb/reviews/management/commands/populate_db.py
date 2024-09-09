@@ -14,6 +14,7 @@ from typing import Optional
 
 from django.core.management.base import BaseCommand
 from django.db.models.base import ModelBase
+
 from reviews.models import Category, Comment, Genre, Review, Title, User
 
 DB_NAME = 'db.sqlite3'

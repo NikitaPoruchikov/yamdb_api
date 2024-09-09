@@ -1,5 +1,3 @@
 MAX_LENGTH_CHAR = 150
 
 MAX_LENGTH_MAIL = 254
-
-USERNAME_REGEX = r'^[\w.@+-]+$'

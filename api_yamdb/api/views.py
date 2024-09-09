@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.db.models import Avg
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
@@ -12,24 +13,25 @@ from rest_framework.permissions import (AllowAny, IsAuthenticated,
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from reviews.models import Category, Genre, Review, Title
-from users.models import CustomUser
 
 from .filters import TitleFilter
 from .mixins import CategoryGenreMixin
 from .permissions import IsAdmin, IsAdminOrReadOnly, IsAuthorModeratorAdmin
 from .serializers import (CategorySerializer, CommentSerializer,
-                          CustomTokenObtainSerializer, CustomUserSerializer,
-                          GenreSerializer, ReviewSerializer,
-                          TitleSerializerNonSafe, TitleSerializerSafe,
-                          UserRegistrationSerializer)
+                          CustomTokenObtainSerializer, GenreSerializer,
+                          ReviewSerializer, TitleSerializerNonSafe,
+                          TitleSerializerSafe, UserSerializer,
+                          UserSignUpSerializer)
+
+User = get_user_model()
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class UserRegistrationViewSet(CreateModelMixin, viewsets.GenericViewSet):
+class UserSignUpViewSet(CreateModelMixin, viewsets.GenericViewSet):
     """ViewSet для регистрации пользователей."""
 
-    serializer_class = UserRegistrationSerializer
-    queryset = CustomUser.objects.all()
+    serializer_class = UserSignUpSerializer
+    queryset = User.objects.all()
     permission_classes = (AllowAny,)
 
     def create(self, request, *args, **kwargs):
@@ -46,11 +48,11 @@ class TokenObtainView(TokenObtainPairView):
     serializer_class = CustomTokenObtainSerializer
 
 
-class CustomUserViewSet(viewsets.ModelViewSet):
+class UserViewSet(viewsets.ModelViewSet):
     """ViewSet для управления пользовательскими данными."""
 
-    queryset = CustomUser.objects.all()
-    serializer_class = CustomUserSerializer
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
     filter_backends = (filters.SearchFilter,)
     search_fields = ('username',)
     permission_classes = (IsAuthenticated, IsAdmin,)
@@ -62,17 +64,17 @@ class CustomUserViewSet(viewsets.ModelViewSet):
         detail=False,
         methods=('get', 'patch'),
         permission_classes=(IsAuthenticated,),
-        serializer_class=CustomUserSerializer
+        serializer_class=UserSerializer
     )
     def me(self, request):
-        serializer = CustomUserSerializer(
+        serializer = UserSerializer(
             request.user,
             data=request.data,
             partial=True
         )
 
         serializer.is_valid(raise_exception=True)
-        serializer.save(role=CustomUser.UserGrade.USER)
+        serializer.save(role=request.user.role)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -128,17 +130,6 @@ class ReviewViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         title_object = get_object_or_404(Title, id=self.kwargs.get('title_id'))
         serializer.save(author=self.request.user, title=title_object)
-
-    def delete(self, request, title_id, review_id):
-        review = get_object_or_404(Review, id=review_id)
-
-        # Проверяем, является ли пользователь автором отзыва
-        if review.author != request.user:
-            return Response({'detail': 'У вас нет прав на удаление .'},
-                            status=403)
-
-        review.delete()
-        return Response(status=204)
 
 
 class TitleViewSet(viewsets.ModelViewSet):

@@ -1,50 +1,45 @@
-from datetime import datetime
+from datetime import date
 
+from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
-from django.core.validators import RegexValidator
 from rest_framework import serializers, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.generics import get_object_or_404
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
-
 from reviews.models import Category, Comment, Genre, Review, Title
-from users.models import CustomUser
-from .constants import MAX_LENGTH_CHAR, MAX_LENGTH_MAIL, USERNAME_REGEX
-from .utils import send_code_to_mail
+from reviews.validators import PastOrPresentYearValidator
+from users.validators import CustomUsernameValidator
+
+from .constants import MAX_LENGTH_CHAR, MAX_LENGTH_MAIL
+from .utils import send_confirmation_email
+
+User = get_user_model()
 
 
-class UserRegistrationSerializer(serializers.Serializer):
+class UserSignUpSerializer(serializers.Serializer):
     """Сериализатор для регистрации пользователя."""
 
     email = serializers.EmailField(
         max_length=MAX_LENGTH_MAIL,
         required=True,
     )
-
     username = serializers.CharField(
         max_length=MAX_LENGTH_CHAR,
         required=True,
-        validators=[
-            RegexValidator(
-                regex=USERNAME_REGEX,
-                message='Имя пользователя может содержать '
-                        'только буквы, цифры и следующие символы: '
-                        '@/./+/-/_',
-            ),
-        ],
+        validators=(CustomUsernameValidator(),),
     )
 
     class Meta:
         fields = ('username', 'email')
 
     def create(self, validated_data):
-        email = validated_data['email']
-        username = validated_data['username']
+        email = validated_data.get('email')
+        username = validated_data.get('username')
 
-        existing_user_by_email = CustomUser.objects.filter(email=email).first()
-        existing_user_by_username = CustomUser.objects.filter(
+        existing_user_by_email = User.objects.filter(email=email).first()
+        existing_user_by_username = User.objects.filter(
             username=username
         ).first()
 
@@ -77,7 +72,7 @@ class UserRegistrationSerializer(serializers.Serializer):
         user = (
             existing_user_by_email
             or existing_user_by_username
-            or CustomUser.objects.create(
+            or User.objects.create(
                 email=email, username=username
             )
         )
@@ -86,14 +81,8 @@ class UserRegistrationSerializer(serializers.Serializer):
         user.confirmation_code = confirmation_code
         user.save()
 
-        send_code_to_mail(email, confirmation_code)
+        send_confirmation_email(email, confirmation_code)
         return user
-
-    def validate_username(self, username):  # copy
-        if username == "me":
-            raise serializers.ValidationError(
-                "Имя пользователя 'me' недопустимо.")
-        return username
 
     def validate(self, data):
         errors = {}
@@ -101,7 +90,7 @@ class UserRegistrationSerializer(serializers.Serializer):
         email = data.get('email')
 
         if username:
-            existing_user_by_username = CustomUser.objects.filter(
+            existing_user_by_username = User.objects.filter(
                 username=username
             ).first()
             if existing_user_by_username and (existing_user_by_username.email
@@ -112,7 +101,7 @@ class UserRegistrationSerializer(serializers.Serializer):
                 ]
 
         if email:
-            existing_user_by_email = CustomUser.objects.filter(
+            existing_user_by_email = User.objects.filter(
                 email=email
             ).first()
             if existing_user_by_email and (existing_user_by_email.username
@@ -144,47 +133,45 @@ class CustomTokenObtainSerializer(TokenObtainSerializer):
         return token
 
     def validate(self, attrs):
-        confirmation_code = attrs.get('confirmation_code')
         username = attrs.get('username')
+        confirmation_code = attrs.get('confirmation_code')
 
-        user = get_object_or_404(CustomUser, username=username)
+        user = get_object_or_404(User, username=username)
 
         if user.confirmation_code != confirmation_code:
+            confirmation_code = default_token_generator.make_token(user)
+            user.confirmation_code = confirmation_code
+            user.save()
+            send_confirmation_email(user.email, confirmation_code)
             raise ValidationError('Неправильный код подтверждения')
 
         token = RefreshToken.for_user(user)
         return {'token': str(token.access_token)}
 
 
-class CustomUserSerializer(serializers.ModelSerializer):
+class UserSerializer(serializers.ModelSerializer):
     """Сериализатор для пользовательской модели."""
 
     username = serializers.CharField(
-        validators=[
-            UniqueValidator(queryset=CustomUser.objects.all()),
-            RegexValidator(regex=USERNAME_REGEX)
-        ],
+        validators=(
+            UniqueValidator(queryset=User.objects.all()),
+            CustomUsernameValidator()
+        ),
         max_length=MAX_LENGTH_CHAR,
         required=True,
     )
 
     email = serializers.EmailField(
-        validators=[UniqueValidator(queryset=CustomUser.objects.all())],
+        validators=[UniqueValidator(queryset=User.objects.all())],
         max_length=MAX_LENGTH_MAIL,
         required=True,
     )
 
     class Meta:
-        model = CustomUser
+        model = User
         fields = (
             'username', 'email', 'first_name', 'last_name', 'bio', 'role'
         )
-
-    def validate_username(self, username):  # copy
-        if username == "me":
-            raise serializers.ValidationError(
-                "Имя пользователя 'me' недопустимо.")
-        return username
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -253,9 +240,13 @@ class TitleSerializerSafe(serializers.ModelSerializer):
 class TitleSerializerNonSafe(serializers.ModelSerializer):
     """Сериализатор для записи информации о названии."""
 
+    year = serializers.IntegerField(
+        validators=(PastOrPresentYearValidator(date.today().year),)
+    )
     rating = serializers.IntegerField(
         default=None, allow_null=True, read_only=True
     )
+    description = serializers.CharField(required=False)
     genre = serializers.SlugRelatedField(
         many=True,
         queryset=Genre.objects.all(),
@@ -266,28 +257,12 @@ class TitleSerializerNonSafe(serializers.ModelSerializer):
         queryset=Category.objects.all(),
         slug_field='slug',
     )
-    description = serializers.CharField(required=False)
 
     class Meta:
         model = Title
         fields = (
             'id', 'name', 'year', 'rating', 'description', 'genre', 'category'
         )
-
-    def validate_year(self, year):
-        """Проверка, что год указан и не позже текущего."""
-        current_year = datetime.now().year
-        if year is None or year <= 0:
-            raise serializers.ValidationError(
-                "Год должен быть положительным числом.",
-                code=status.HTTP_400_BAD_REQUEST
-            )
-        if year > current_year:
-            raise serializers.ValidationError(
-                "Год не может быть позже текущего года.",
-                code=status.HTTP_400_BAD_REQUEST
-            )
-        return year
 
     def validate_genre(self, value):
         """Проверка, что список жанров не пустой."""

@@ -5,13 +5,13 @@ from django.utils.translation import gettext_lazy as _
 
 from .constants import (MAX_LENGTH_CHAR, MAX_LENGTH_CHAR_BIO, MAX_LENGTH_MAIL,
                         MAX_LENGTH_ROLE)
-from .validators import validate_username
+from .validators import CustomUsernameValidator
 
 
 class CustomUser(AbstractUser):
     """Кастомная модель пользователя."""
 
-    class UserGrade(models.TextChoices):
+    class Role(models.TextChoices):
         USER = 'user', _('User')
         MODERATOR = 'moderator', _('Moderator')
         ADMIN = 'admin', _('Admin')
@@ -20,7 +20,7 @@ class CustomUser(AbstractUser):
         'Логин',
         max_length=MAX_LENGTH_CHAR,
         unique=True,
-        validators=(validate_username, UnicodeUsernameValidator())
+        validators=(CustomUsernameValidator(), UnicodeUsernameValidator())
     )
     email = models.EmailField('Почта', max_length=MAX_LENGTH_MAIL, unique=True)
     first_name = models.CharField(
@@ -42,8 +42,8 @@ class CustomUser(AbstractUser):
         'Статус',
         max_length=MAX_LENGTH_ROLE,
         blank=False,
-        choices=UserGrade.choices,
-        default=UserGrade.USER,
+        choices=Role.choices,
+        default=Role.USER,
     )
     confirmation_code = models.CharField(
         verbose_name='Код подтверждения',
@@ -60,8 +60,8 @@ class CustomUser(AbstractUser):
 
     @property
     def is_admin(self):
-        return self.role == self.UserGrade.ADMIN or self.is_staff
+        return self.role == self.Role.ADMIN or self.is_staff
 
     @property
     def is_moderator(self):
-        return self.role == self.UserGrade.MODERATOR
+        return self.role == self.Role.MODERATOR
